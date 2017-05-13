@@ -1,6 +1,7 @@
 package etf
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/binary"
 	"fmt"
@@ -114,9 +115,32 @@ func (c *Context) ReadDist(r io.Reader) (err error) {
 	return
 }
 
+type Decoder struct {
+	context   *Context
+	r         io.Reader
+	bufReader *bufio.Reader
+}
+
+func (c *Context) NewDecoder(r io.Reader) *Decoder {
+	return &Decoder{
+		context:   c,
+		r:         r,
+		bufReader: bufio.NewReader(r),
+	}
+}
+
 func (c *Context) Read(r io.Reader) (term Term, err error) {
-	var etype byte
-	if etype, err = ruint8(r); err != nil {
+	reader := &Decoder{
+		context:   c,
+		r:         r,
+		bufReader: bufio.NewReader(r),
+	}
+	return reader.Read()
+}
+
+func (r *Decoder) Read() (term Term, err error) {
+	etype, err := r.bufReader.ReadByte()
+	if err != nil {
 		return nil, err
 	}
 	var b []byte
@@ -124,23 +148,23 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	switch etype {
 	case ettAtom, ettAtomUTF8:
 		// $dLL… | $vLL…
-		if b, err = buint16(r); err == nil {
-			_, err = io.ReadFull(r, b)
+		if b, err = buint16(r.bufReader); err == nil {
+			_, err = io.ReadFull(r.bufReader, b)
 			term = newAtom(b)
 		}
 
 	case ettSmallAtom, ettSmallAtomUTF8:
 		// $sL…, $wL…
-		if b, err = buint8(r); err == nil {
-			_, err = io.ReadFull(r, b)
+		if b, err = buint8(r.bufReader); err == nil {
+			_, err = io.ReadFull(r.bufReader, b)
 			term = newAtom(b)
 		}
 
 	case ettBinary:
 		// $mLLLL…
-		if b, err = buint32(r); err == nil {
-			_, err = io.ReadFull(r, b)
-			if c.ConvertBinaryToString {
+		if b, err = buint32(r.bufReader); err == nil {
+			_, err = io.ReadFull(r.bufReader, b)
+			if r.context.ConvertBinaryToString {
 				term = string(b)
 			} else {
 				term = b
@@ -149,15 +173,15 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 
 	case ettString:
 		// $kLL…
-		if b, err = buint16(r); err == nil {
-			_, err = io.ReadFull(r, b)
+		if b, err = buint16(r.bufReader); err == nil {
+			_, err = io.ReadFull(r.bufReader, b)
 			term = string(b)
 		}
 
 	case ettFloat:
 		// $cFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0
 		b = make([]byte, 31)
-		if _, err = io.ReadFull(r, b); err != nil {
+		if _, err = io.ReadFull(r.bufReader, b); err != nil {
 			return
 		}
 		var r int
@@ -170,41 +194,41 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	case ettNewFloat:
 		// $FFFFFFFFF
 		b = make([]byte, 8)
-		if _, err = io.ReadFull(r, b); err == nil {
+		if _, err = io.ReadFull(r.bufReader, b); err == nil {
 			term = math.Float64frombits(be.Uint64(b))
 		}
 
 	case ettSmallInteger:
 		// $aI
 		var x uint8
-		x, err = ruint8(r)
+		x, err = r.bufReader.ReadByte()
 		term = int(x)
 
 	case ettInteger:
 		// $bIIII
 		var x int32
-		err = binary.Read(r, be, &x)
+		err = binary.Read(r.bufReader, be, &x)
 		term = int(x)
 
 	case ettSmallBig:
 		// $nAS…
 		b = make([]byte, 2)
-		if _, err = io.ReadFull(r, b); err != nil {
+		if _, err = io.ReadFull(r.bufReader, b); err != nil {
 			break
 		}
 		sign := b[1]
 		b = make([]byte, b[0])
-		term, err = readBigInt(r, b, sign)
+		term, err = readBigInt(r.bufReader, b, sign)
 
 	case ettLargeBig:
 		// $oAAAAS…
 		b = make([]byte, 5)
-		if _, err = io.ReadFull(r, b); err != nil {
+		if _, err = io.ReadFull(r.bufReader, b); err != nil {
 			break
 		}
 		sign := b[4]
 		b = make([]byte, be.Uint32(b[:4]))
-		term, err = readBigInt(r, b, sign)
+		term, err = readBigInt(r.bufReader, b, sign)
 
 	case ettNil:
 		// $j
@@ -214,9 +238,9 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 		var node interface{}
 		var pid Pid
 		b = make([]byte, 9)
-		if node, err = c.Read(r); err != nil {
+		if node, err = r.Read(); err != nil {
 			return
-		} else if _, err = io.ReadFull(r, b); err != nil {
+		} else if _, err = io.ReadFull(r.bufReader, b); err != nil {
 			return
 		}
 		pid.Node = node.(Atom)
@@ -230,17 +254,17 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 		var ref Ref
 		var node interface{}
 		var nid uint16
-		if nid, err = ruint16(r); err != nil {
+		if nid, err = ruint16(r.bufReader); err != nil {
 			return
-		} else if node, err = c.Read(r); err != nil {
+		} else if node, err = r.Read(); err != nil {
 			return
-		} else if ref.Creation, err = ruint8(r); err != nil {
+		} else if ref.Creation, err = r.bufReader.ReadByte(); err != nil {
 			return
 		}
 		ref.Node = node.(Atom)
 		ref.Id = make([]uint32, nid)
 		for i := 0; i < cap(ref.Id); i++ {
-			if ref.Id[i], err = ruint32(r); err != nil {
+			if ref.Id[i], err = ruint32(r.bufReader); err != nil {
 				return
 			}
 		}
@@ -250,14 +274,14 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 		// $e…LLLLB
 		var ref Ref
 		var node interface{}
-		if node, err = c.Read(r); err != nil {
+		if node, err = r.Read(); err != nil {
 			return
 		}
 		ref.Node = node.(Atom)
 		ref.Id = make([]uint32, 1)
-		if ref.Id[0], err = ruint32(r); err != nil {
+		if ref.Id[0], err = ruint32(r.bufReader); err != nil {
 			return
-		} else if _, err = io.ReadFull(r, b); err != nil {
+		} else if _, err = io.ReadFull(r.bufReader, b); err != nil {
 			return
 		}
 		ref.Creation = b[0]
@@ -266,12 +290,12 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	case ettSmallTuple:
 		// $hA…
 		var arity uint8
-		if arity, err = ruint8(r); err != nil {
+		if arity, err = r.bufReader.ReadByte(); err != nil {
 			break
 		}
 		tuple := make(Tuple, arity)
 		for i := 0; i < cap(tuple); i++ {
-			if tuple[i], err = c.Read(r); err != nil {
+			if tuple[i], err = r.Read(); err != nil {
 				break
 			}
 		}
@@ -280,12 +304,12 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	case ettLargeTuple:
 		// $iAAAA…
 		var arity uint32
-		if arity, err = ruint32(r); err != nil {
+		if arity, err = ruint32(r.bufReader); err != nil {
 			break
 		}
 		tuple := make(Tuple, arity)
 		for i := 0; i < cap(tuple); i++ {
-			if tuple[i], err = c.Read(r); err != nil {
+			if tuple[i], err = r.Read(); err != nil {
 				break
 			}
 		}
@@ -294,13 +318,13 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	case ettList:
 		// $lLLLL…$j
 		var n uint32
-		if n, err = ruint32(r); err != nil {
+		if n, err = ruint32(r.bufReader); err != nil {
 			return
 		}
 
 		list := make(List, n+1)
 		for i := 0; i < cap(list); i++ {
-			if list[i], err = c.Read(r); err != nil {
+			if list[i], err = r.Read(); err != nil {
 				return
 			}
 		}
@@ -315,19 +339,19 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	case ettMap:
 		// $mLLLL...
 		var n uint32
-		if n, err = ruint32(r); err != nil {
+		if n, err = ruint32(r.bufReader); err != nil {
 			return
 		}
 
 		mp := make(Map, n)
 		for i := uint32(0); i < n; i++ {
 			var key Term
-			if key, err = c.Read(r); err != nil {
+			if key, err = r.Read(); err != nil {
 				return
 			}
 
 			var value Term
-			if value, err = c.Read(r); err != nil {
+			if value, err = r.Read(); err != nil {
 				return
 			}
 
@@ -339,13 +363,13 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 		// $MLLLLB…
 		var length uint32
 		var bits uint8
-		if length, err = ruint32(r); err != nil {
+		if length, err = ruint32(r.bufReader); err != nil {
 			break
-		} else if bits, err = ruint8(r); err != nil {
+		} else if bits, err = r.bufReader.ReadByte(); err != nil {
 			break
 		}
 		b := make([]byte, length)
-		_, err = io.ReadFull(r, b)
+		_, err = io.ReadFull(r.bufReader, b)
 		b[len(b)-1] = b[len(b)-1] >> (8 - bits)
 		term = b
 
@@ -353,11 +377,11 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 		// $qM…F…A
 		var m, f interface{}
 		var a uint8
-		if m, err = c.Read(r); err != nil {
+		if m, err = r.Read(); err != nil {
 			break
-		} else if f, err = c.Read(r); err != nil {
+		} else if f, err = r.Read(); err != nil {
 			break
-		} else if a, err = ruint8(r); err != nil {
+		} else if a, err = r.bufReader.ReadByte(); err != nil {
 			break
 		}
 
@@ -366,19 +390,19 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	case ettNewFun:
 		// $pSSSSAUUUUUUUUUUUUUUUUIIIIFFFFM…i…u…P…[V…]
 		var f Function
-		ruint32(r)
-		f.Arity, _ = ruint8(r)
-		io.ReadFull(r, f.Unique[:])
-		f.Index, _ = ruint32(r)
-		f.Free, _ = ruint32(r)
-		m, _ := c.Read(r)
-		oldi, _ := c.Read(r)
-		oldu, _ := c.Read(r)
-		pid, _ := c.Read(r)
+		ruint32(r.bufReader)
+		f.Arity, _ = r.bufReader.ReadByte()
+		io.ReadFull(r.bufReader, f.Unique[:])
+		f.Index, _ = ruint32(r.bufReader)
+		f.Free, _ = ruint32(r.bufReader)
+		m, _ := r.Read()
+		oldi, _ := r.Read()
+		oldu, _ := r.Read()
+		pid, _ := r.Read()
 
 		f.FreeVars = make([]Term, f.Free)
 		for i := 0; i < cap(f.FreeVars); i++ {
-			if f.FreeVars[i], err = c.Read(r); err != nil {
+			if f.FreeVars[i], err = r.Read(); err != nil {
 				break
 			}
 		}
@@ -392,15 +416,15 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	case ettFun:
 		// $uFFFFP…M…i…u…[V…]
 		var f Function
-		f.Free, _ = ruint32(r)
-		pid, _ := c.Read(r)
-		m, _ := c.Read(r)
-		oldi, _ := c.Read(r)
-		oldu, _ := c.Read(r)
+		f.Free, _ = ruint32(r.bufReader)
+		pid, _ := r.Read()
+		m, _ := r.Read()
+		oldi, _ := r.Read()
+		oldu, _ := r.Read()
 
 		f.FreeVars = make([]Term, f.Free)
 		for i := 0; i < cap(f.FreeVars); i++ {
-			if f.FreeVars[i], err = c.Read(r); err != nil {
+			if f.FreeVars[i], err = r.Read(); err != nil {
 				break
 			}
 		}
@@ -414,18 +438,18 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 	case ettPort:
 		// $fA…IIIIC
 		var p Port
-		a, _ := c.Read(r)
+		a, _ := r.Read()
 		p.Node = a.(Atom)
-		p.Id, _ = ruint32(r)
-		p.Creation, err = ruint8(r)
+		p.Id, _ = ruint32(r.bufReader)
+		p.Creation, err = r.bufReader.ReadByte()
 		term = p
 
 	case ettCacheRef:
 		b = make([]byte, 1)
-		if _, err = io.ReadFull(r, b); err != nil {
+		if _, err = io.ReadFull(r.bufReader, b); err != nil {
 			break
 		}
-		term = Atom(*c.currentCache[b[0]])
+		term = Atom(*r.context.currentCache[b[0]])
 
 	default:
 		err = &ErrUnknownTerm{etype}
@@ -474,11 +498,12 @@ func readBigInt(r io.Reader, b []byte, sign byte) (interface{}, error) {
 	return v, nil
 }
 
-func ruint8(r io.Reader) (uint8, error) {
-	b := []byte{0}
-	_, err := io.ReadFull(r, b)
-	return b[0], err
-}
+// func ruint8(r bufio.new.Reader) (uint8, error) {
+// 	b := []byte{0}
+// 	_, err := r.Read(b)
+// 	// _, err := io.ReadFull(r, b)
+// 	return b[0], err
+// }
 
 func ruint16(r io.Reader) (uint16, error) {
 	b := []byte{0, 0}
@@ -492,8 +517,8 @@ func ruint32(r io.Reader) (uint32, error) {
 	return be.Uint32(b), err
 }
 
-func buint8(r io.Reader) ([]byte, error) {
-	size, err := ruint8(r)
+func buint8(r *bufio.Reader) ([]byte, error) {
+	size, err := r.ReadByte()
 	return make([]byte, size), err
 }
 
