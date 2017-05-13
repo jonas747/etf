@@ -140,7 +140,7 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 		// $mLLLL…
 		if b, err = buint32(r); err == nil {
 			_, err = io.ReadFull(r, b)
-			term = b
+			term = string(b)
 		}
 
 	case ettString:
@@ -307,6 +307,29 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 			list = list[:n]
 		}
 		term = list
+
+	case ettMap:
+		// $mLLLL...
+		var n uint32
+		if n, err = ruint32(r); err != nil {
+			return
+		}
+
+		mp := make(Map, n)
+		for i := uint32(0); i < n; i++ {
+			var key Term
+			if key, err = c.Read(r); err != nil {
+				return
+			}
+
+			var value Term
+			if value, err = c.Read(r); err != nil {
+				return
+			}
+
+			mp[key] = value
+		}
+		term = mp
 
 	case ettBitBinary:
 		// $MLLLLB…

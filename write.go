@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"strings"
 )
 
 type ErrUnknownType struct {
@@ -30,7 +31,7 @@ func (c *Context) Write(w io.Writer, term interface{}) (err error) {
 	case *big.Int:
 		err = c.writeBigInt(w, v)
 	case string:
-		err = c.writeString(w, v)
+		err = c.writeBinary(w, []byte(v))
 	case []byte:
 		err = c.writeBinary(w, v)
 	case float64:
@@ -38,7 +39,8 @@ func (c *Context) Write(w io.Writer, term interface{}) (err error) {
 	case float32:
 		err = c.writeFloat(w, float64(v))
 	case Atom:
-		err = c.writeAtom(w, v)
+		err = c.writeBinary(w, []byte(v))
+		// err = c.writeAtom(w, v)
 	case Pid:
 		err = c.writePid(w, v)
 	case Tuple:
@@ -49,13 +51,15 @@ func (c *Context) Write(w io.Writer, term interface{}) (err error) {
 		rv := reflect.ValueOf(v)
 		switch rv.Kind() {
 		case reflect.Struct:
-			err = c.writeRecord(w, term)
+			fmt.Println("struct")
+			err = c.writeStruct(w, term)
 		case reflect.Array, reflect.Slice:
 			err = c.writeList(w, term)
 		case reflect.Ptr:
 			err = c.Write(w, rv.Elem())
 		//case reflect.Map // FIXME
 		default:
+			fmt.Println(rv.Type().Name(), "Default")
 			err = &ErrUnknownType{rv.Type()}
 		}
 	}
@@ -69,17 +73,19 @@ func (e *ErrUnknownType) Error() string {
 
 func (c *Context) writeAtom(w io.Writer, atom Atom) (err error) {
 	switch size := len(atom); {
-	case size <= math.MaxUint8:
-		// $sL…
-		if _, err = w.Write([]byte{ettSmallAtom, byte(size)}); err == nil {
-			_, err = io.WriteString(w, string(atom))
-		}
+	// case size <= math.MaxUint8:
+	// 	// $sL…
+	// 	if _, err = w.Write([]byte{ettSmallAtom, byte(size)}); err == nil {
+	// 		_, err = io.WriteString(w, string(atom))
+	// 	}
 
 	case size <= math.MaxUint16:
 		// $dLL…
 		_, err = w.Write([]byte{ettAtom, byte(size >> 8), byte(size)})
 		if err == nil {
-			_, err = io.WriteString(w, string(atom))
+			var n int
+			n, err = io.WriteString(w, string(atom))
+			fmt.Println("wrote", atom, "n", n)
 		}
 
 	default:
@@ -143,9 +149,9 @@ func (c *Context) writeBinary(w io.Writer, bytes []byte) (err error) {
 func (c *Context) writeBool(w io.Writer, b bool) (err error) {
 	// $sL…
 	if b {
-		_, err = w.Write([]byte{ettSmallAtom, 4, 't', 'r', 'u', 'e'})
+		_, err = w.Write([]byte{ettAtom, 0, 4, 't', 'r', 'u', 'e'})
 	} else {
-		_, err = w.Write([]byte{ettSmallAtom, 5, 'f', 'a', 'l', 's', 'e'})
+		_, err = w.Write([]byte{ettAtom, 0, 5, 'f', 'a', 'l', 's', 'e'})
 	}
 
 	return
@@ -265,32 +271,49 @@ func (c *Context) writeList(w io.Writer, l interface{}) (err error) {
 	return
 }
 
-func (c *Context) writeRecord(w io.Writer, r interface{}) (err error) {
+func (c *Context) writeStruct(w io.Writer, r interface{}) (err error) {
 	rv := reflect.ValueOf(r)
+	rt := reflect.TypeOf(r)
 	n := rv.NumField()
 	buf := new(bytes.Buffer)
-	arity := 0
+	arity := uint32(0)
 
+	// Write the key-value pairs to a temporary buffer first
 	for i := 0; i < n; i++ {
 		if f := rv.Field(i); f.CanInterface() {
+			fieldName := rt.Field(i).Name
+
+			jsonTags := rt.Field(i).Tag.Get("json")
+			if jsonTags != "" {
+				split := strings.SplitN(jsonTags, ",", 2)
+				if len(split) > 0 {
+					if split[0] != "" {
+						fieldName = split[0]
+						fmt.Println("using alt name", fieldName)
+					}
+				}
+			}
+
+			err = c.Write(buf, Atom(fieldName))
+			if err != nil {
+				return
+			}
+
 			if err = c.Write(buf, f.Interface()); err != nil {
 				return
 			}
+
 			arity++
 		}
 	}
 
-	if arity <= math.MaxUint8 {
-		_, err = w.Write([]byte{ettSmallTuple, byte(arity)})
-	} else {
-		_, err = w.Write([]byte{
-			ettLargeTuple,
-			byte(arity >> 24),
-			byte(arity >> 16),
-			byte(arity >> 8),
-			byte(arity),
-		})
-	}
+	_, err = w.Write([]byte{
+		ettMap,
+		byte(arity >> 24),
+		byte(arity >> 16),
+		byte(arity >> 8),
+		byte(arity),
+	})
 
 	if err == nil {
 		_, err = buf.WriteTo(w)
