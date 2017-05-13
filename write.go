@@ -82,8 +82,7 @@ func (c *Context) writeAtom(w io.Writer, atom Atom) (err error) {
 		// $dLL…
 		_, err = w.Write([]byte{ettAtom, byte(size >> 8), byte(size)})
 		if err == nil {
-			var n int
-			n, err = io.WriteString(w, string(atom))
+			_, err = io.WriteString(w, string(atom))
 		}
 
 	default:
