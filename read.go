@@ -140,7 +140,11 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 		// $mLLLL…
 		if b, err = buint32(r); err == nil {
 			_, err = io.ReadFull(r, b)
-			term = string(b)
+			if c.ConvertBinaryToString {
+				term = string(b)
+			} else {
+				term = b
+			}
 		}
 
 	case ettString:

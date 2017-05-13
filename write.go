@@ -39,8 +39,11 @@ func (c *Context) Write(w io.Writer, term interface{}) (err error) {
 	case float32:
 		err = c.writeFloat(w, float64(v))
 	case Atom:
-		err = c.writeBinary(w, []byte(v))
-		// err = c.writeAtom(w, v)
+		if c.ConvertAtomsToBinary {
+			err = c.writeBinary(w, []byte(v))
+		} else {
+			err = c.writeAtom(w, v)
+		}
 	case Pid:
 		err = c.writePid(w, v)
 	case Tuple:
@@ -56,7 +59,8 @@ func (c *Context) Write(w io.Writer, term interface{}) (err error) {
 			err = c.writeList(w, term)
 		case reflect.Ptr:
 			err = c.Write(w, rv.Elem())
-		//case reflect.Map // FIXME
+		case reflect.Map:
+			err = c.writeMap(w, rv)
 		default:
 			fmt.Println(rv.Type().Name(), "Default")
 			err = &ErrUnknownType{rv.Type()}
@@ -301,6 +305,41 @@ func (c *Context) writeStruct(w io.Writer, r interface{}) (err error) {
 
 			arity++
 		}
+	}
+
+	_, err = w.Write([]byte{
+		ettMap,
+		byte(arity >> 24),
+		byte(arity >> 16),
+		byte(arity >> 8),
+		byte(arity),
+	})
+
+	if err == nil {
+		_, err = buf.WriteTo(w)
+	}
+
+	return
+}
+
+func (c *Context) writeMap(w io.Writer, rv reflect.Value) (err error) {
+
+	keys := rv.MapKeys()
+
+	arity := uint32(0)
+	buf := new(bytes.Buffer)
+	for _, key := range keys {
+		err = c.Write(buf, key.Interface())
+		if err != nil {
+			return
+		}
+
+		val := rv.MapIndex(key).Interface()
+		err = c.Write(buf, val)
+		if err != nil {
+			return
+		}
+		arity++
 	}
 
 	_, err = w.Write([]byte{

@@ -17,8 +17,10 @@ type atomCacheRef struct {
 }
 
 type Context struct {
-	atomCache    [2048]*string
-	currentCache []*string
+	atomCache             [2048]*string
+	currentCache          []*string
+	ConvertBinaryToString bool
+	ConvertAtomsToBinary  bool
 }
 
 type Term interface{}
@@ -86,34 +88,34 @@ type Export struct {
 
 // Erlang external term tags.
 const (
-	ettAtom          = 'd'
-	ettAtomUTF8      = 'v' // this is beyond retarded
-	ettBinary        = 'm'
-	ettBitBinary     = 'M'
-	ettCachedAtom    = 'C'
-	ettCacheRef      = 'R'
-	ettExport        = 'q'
-	ettFloat         = 'c'
-	ettFun           = 'u'
-	ettInteger       = 'b'
-	ettLargeBig      = 'o'
-	ettLargeTuple    = 'i'
-	ettList          = 'l'
-	ettNewCache      = 'N'
-	ettNewFloat      = 'F'
-	ettNewFun        = 'p'
-	ettNewRef        = 'r'
-	ettNil           = 'j'
-	ettPid           = 'g'
-	ettPort          = 'f'
-	ettRef           = 'e'
-	ettSmallAtom     = 's'
-	ettSmallAtomUTF8 = 'w' // this is beyond retarded
-	ettSmallBig      = 'n'
-	ettSmallInteger  = 'a'
-	ettSmallTuple    = 'h'
-	ettString        = 'k'
-	ettMap           = 't'
+	ettAtom          = byte(100)
+	ettAtomUTF8      = byte(118) // this is beyond retarded
+	ettBinary        = byte(109)
+	ettBitBinary     = byte(77)
+	ettCachedAtom    = byte(67)
+	ettCacheRef      = byte(82)
+	ettExport        = byte(113)
+	ettFloat         = byte(99)
+	ettFun           = byte(117)
+	ettInteger       = byte(98)
+	ettLargeBig      = byte(111)
+	ettLargeTuple    = byte(105)
+	ettList          = byte(108)
+	ettNewCache      = byte(78)
+	ettNewFloat      = byte(70)
+	ettNewFun        = byte(112)
+	ettNewRef        = byte(114)
+	ettNil           = byte(106)
+	ettPid           = byte(103)
+	ettPort          = byte(102)
+	ettRef           = byte(101)
+	ettSmallAtom     = byte(115)
+	ettSmallAtomUTF8 = byte(119) // this is beyond retarded
+	ettSmallBig      = byte(110)
+	ettSmallInteger  = byte(97)
+	ettSmallTuple    = byte(104)
+	ettString        = byte(107)
+	ettMap           = byte(116)
 )
 
 const (
