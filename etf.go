@@ -242,9 +242,8 @@ func setMapField(v Map, field reflect.Value, t reflect.Type) error {
 		return setMapMapField(v, field, t)
 	} else if t.Kind() == reflect.Struct {
 		return setMapStructField(v, field, t)
-	} else if t.Name() == "Term" && t.PkgPath() == "github.com/jonas747/etf" {
+	} else if t.Kind() == reflect.Interface {
 		// TODO... do this a better way
-		fmt.Println(t.Name())
 		field.Set(reflect.ValueOf(v))
 		return nil
 	}

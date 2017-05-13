@@ -51,7 +51,6 @@ func (c *Context) Write(w io.Writer, term interface{}) (err error) {
 		rv := reflect.ValueOf(v)
 		switch rv.Kind() {
 		case reflect.Struct:
-			fmt.Println("struct")
 			err = c.writeStruct(w, term)
 		case reflect.Array, reflect.Slice:
 			err = c.writeList(w, term)
@@ -85,7 +84,6 @@ func (c *Context) writeAtom(w io.Writer, atom Atom) (err error) {
 		if err == nil {
 			var n int
 			n, err = io.WriteString(w, string(atom))
-			fmt.Println("wrote", atom, "n", n)
 		}
 
 	default:
@@ -289,7 +287,6 @@ func (c *Context) writeStruct(w io.Writer, r interface{}) (err error) {
 				if len(split) > 0 {
 					if split[0] != "" {
 						fieldName = split[0]
-						fmt.Println("using alt name", fieldName)
 					}
 				}
 			}
