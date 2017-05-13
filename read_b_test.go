@@ -32,7 +32,7 @@ func BenchmarkReadAtom(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := decoder.Read()
+		_, err := decoder.NextTerm()
 
 		if err != io.EOF && err != nil {
 			b.Fatal(err)
@@ -67,7 +67,7 @@ func BenchmarkReadBigInt(b *testing.B) {
 	b.StartTimer()
 
 	for i := 0; i < b.N; i++ {
-		_, err := decoder.Read()
+		_, err := decoder.NextTerm()
 
 		if err != io.EOF && err != nil {
 			b.Fatal(err)
@@ -214,7 +214,7 @@ func BenchmarkRealistic(b *testing.B) {
 		buf.Write(realisticEncoded)
 		b.StartTimer()
 		decoder := c.NewDecoder(buf)
-		_, err := decoder.Read()
+		_, err := decoder.NextTerm()
 		if err != nil {
 			b.Fatal(err)
 		}

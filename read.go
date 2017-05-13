@@ -119,6 +119,7 @@ type Decoder struct {
 	context   *Context
 	r         io.Reader
 	bufReader *bufio.Reader
+	buf       []byte
 }
 
 func (c *Context) NewDecoder(r io.Reader) *Decoder {
@@ -135,10 +136,10 @@ func (c *Context) Read(r io.Reader) (term Term, err error) {
 		r:         r,
 		bufReader: bufio.NewReader(r),
 	}
-	return reader.Read()
+	return reader.NextTerm()
 }
 
-func (r *Decoder) Read() (term Term, err error) {
+func (r *Decoder) NextTerm() (term Term, err error) {
 	etype, err := r.bufReader.ReadByte()
 	if err != nil {
 		return nil, err
@@ -238,7 +239,7 @@ func (r *Decoder) Read() (term Term, err error) {
 		var node interface{}
 		var pid Pid
 		b = make([]byte, 9)
-		if node, err = r.Read(); err != nil {
+		if node, err = r.NextTerm(); err != nil {
 			return
 		} else if _, err = io.ReadFull(r.bufReader, b); err != nil {
 			return
@@ -256,7 +257,7 @@ func (r *Decoder) Read() (term Term, err error) {
 		var nid uint16
 		if nid, err = ruint16(r.bufReader); err != nil {
 			return
-		} else if node, err = r.Read(); err != nil {
+		} else if node, err = r.NextTerm(); err != nil {
 			return
 		} else if ref.Creation, err = r.bufReader.ReadByte(); err != nil {
 			return
@@ -274,7 +275,7 @@ func (r *Decoder) Read() (term Term, err error) {
 		// $e…LLLLB
 		var ref Ref
 		var node interface{}
-		if node, err = r.Read(); err != nil {
+		if node, err = r.NextTerm(); err != nil {
 			return
 		}
 		ref.Node = node.(Atom)
@@ -295,7 +296,7 @@ func (r *Decoder) Read() (term Term, err error) {
 		}
 		tuple := make(Tuple, arity)
 		for i := 0; i < cap(tuple); i++ {
-			if tuple[i], err = r.Read(); err != nil {
+			if tuple[i], err = r.NextTerm(); err != nil {
 				break
 			}
 		}
@@ -309,7 +310,7 @@ func (r *Decoder) Read() (term Term, err error) {
 		}
 		tuple := make(Tuple, arity)
 		for i := 0; i < cap(tuple); i++ {
-			if tuple[i], err = r.Read(); err != nil {
+			if tuple[i], err = r.NextTerm(); err != nil {
 				break
 			}
 		}
@@ -324,7 +325,7 @@ func (r *Decoder) Read() (term Term, err error) {
 
 		list := make(List, n+1)
 		for i := 0; i < cap(list); i++ {
-			if list[i], err = r.Read(); err != nil {
+			if list[i], err = r.NextTerm(); err != nil {
 				return
 			}
 		}
@@ -346,12 +347,12 @@ func (r *Decoder) Read() (term Term, err error) {
 		mp := make(Map, n)
 		for i := uint32(0); i < n; i++ {
 			var key Term
-			if key, err = r.Read(); err != nil {
+			if key, err = r.NextTerm(); err != nil {
 				return
 			}
 
 			var value Term
-			if value, err = r.Read(); err != nil {
+			if value, err = r.NextTerm(); err != nil {
 				return
 			}
 
@@ -377,9 +378,9 @@ func (r *Decoder) Read() (term Term, err error) {
 		// $qM…F…A
 		var m, f interface{}
 		var a uint8
-		if m, err = r.Read(); err != nil {
+		if m, err = r.NextTerm(); err != nil {
 			break
-		} else if f, err = r.Read(); err != nil {
+		} else if f, err = r.NextTerm(); err != nil {
 			break
 		} else if a, err = r.bufReader.ReadByte(); err != nil {
 			break
@@ -395,14 +396,14 @@ func (r *Decoder) Read() (term Term, err error) {
 		io.ReadFull(r.bufReader, f.Unique[:])
 		f.Index, _ = ruint32(r.bufReader)
 		f.Free, _ = ruint32(r.bufReader)
-		m, _ := r.Read()
-		oldi, _ := r.Read()
-		oldu, _ := r.Read()
-		pid, _ := r.Read()
+		m, _ := r.NextTerm()
+		oldi, _ := r.NextTerm()
+		oldu, _ := r.NextTerm()
+		pid, _ := r.NextTerm()
 
 		f.FreeVars = make([]Term, f.Free)
 		for i := 0; i < cap(f.FreeVars); i++ {
-			if f.FreeVars[i], err = r.Read(); err != nil {
+			if f.FreeVars[i], err = r.NextTerm(); err != nil {
 				break
 			}
 		}
@@ -417,14 +418,14 @@ func (r *Decoder) Read() (term Term, err error) {
 		// $uFFFFP…M…i…u…[V…]
 		var f Function
 		f.Free, _ = ruint32(r.bufReader)
-		pid, _ := r.Read()
-		m, _ := r.Read()
-		oldi, _ := r.Read()
-		oldu, _ := r.Read()
+		pid, _ := r.NextTerm()
+		m, _ := r.NextTerm()
+		oldi, _ := r.NextTerm()
+		oldu, _ := r.NextTerm()
 
 		f.FreeVars = make([]Term, f.Free)
 		for i := 0; i < cap(f.FreeVars); i++ {
-			if f.FreeVars[i], err = r.Read(); err != nil {
+			if f.FreeVars[i], err = r.NextTerm(); err != nil {
 				break
 			}
 		}
@@ -438,7 +439,7 @@ func (r *Decoder) Read() (term Term, err error) {
 	case ettPort:
 		// $fA…IIIIC
 		var p Port
-		a, _ := r.Read()
+		a, _ := r.NextTerm()
 		p.Node = a.(Atom)
 		p.Id, _ = ruint32(r.bufReader)
 		p.Creation, err = r.bufReader.ReadByte()
