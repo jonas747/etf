@@ -3,7 +3,6 @@ package etf
 import (
 	"bytes"
 	"encoding/binary"
-	// "encoding/json"
 	"io"
 	"math"
 	"math/big"
@@ -208,12 +207,13 @@ func BenchmarkRealistic(b *testing.B) {
 	c := new(Context)
 	c.ConvertBinaryToString = true
 
+	buf := new(bytes.Buffer)
+	for i := 0; i < b.N; i++ {
+		buf.Write(realisticEncoded)
+	}
+
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		b.StopTimer()
-		buf := new(bytes.Buffer)
-		buf.Write(realisticEncoded)
-		b.StartTimer()
 		decoder := c.NewDecoder(buf)
 		_, err := decoder.NextTerm()
 		if err != nil {

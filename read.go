@@ -144,39 +144,30 @@ func (d *Decoder) NextTerm() (term Term, err error) {
 	switch etype {
 	case ettAtom, ettAtomUTF8:
 		// $dLL… | $vLL…
-		l, err := d.ruint16()
+		b, err = d.uint16BorrowRead()
 		if err != nil {
-			return nil, err
+			break
 		}
-		b, err := d.read(int(l))
-		if err != nil {
-			return nil, err
-		}
-		term = newAtom(b)
+		term = Atom(b)
 
 	case ettSmallAtom, ettSmallAtomUTF8:
 		// $sL…, $wL…
-		if b, err = d.buint8(); err == nil {
-			_, err = io.ReadFull(d.r, b)
-			term = newAtom(b)
+		b, err = d.uint8BorrowRead()
+		if err != nil {
+			break
 		}
+		term = Atom(b)
 
 	case ettBinary:
 		// $mLLLL…
 		if d.context.ConvertBinaryToString {
-			l, err := d.ruint32()
+			b, err = d.uint32BorrowRead()
 			if err != nil {
-				return nil, err
-			}
-
-			b, err := d.read(int(l))
-			if err != nil {
-				return nil, err
+				break
 			}
 
 			term = string(b)
 		} else {
-
 			if b, err = d.buint32(); err == nil {
 				_, err = io.ReadFull(d.r, b)
 				term = b
@@ -192,10 +183,11 @@ func (d *Decoder) NextTerm() (term Term, err error) {
 
 	case ettFloat:
 		// $cFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF0
-		b = make([]byte, 31)
-		if _, err = io.ReadFull(d.r, b); err != nil {
-			return
+		b, err = d.read(31)
+		if err != nil {
+			break
 		}
+
 		var r int
 		var f float64
 		if r, err = fmt.Sscanf(string(b), "%f", &f); r != 1 && err == nil {
@@ -205,10 +197,12 @@ func (d *Decoder) NextTerm() (term Term, err error) {
 
 	case ettNewFloat:
 		// $FFFFFFFFF
-		b = make([]byte, 8)
-		if _, err = io.ReadFull(d.r, b); err == nil {
-			term = math.Float64frombits(be.Uint64(b))
+		b, err = d.read(8)
+		if err != nil {
+			break
 		}
+
+		term = math.Float64frombits(be.Uint64(b))
 
 	case ettSmallInteger:
 		// $aI
@@ -230,31 +224,30 @@ func (d *Decoder) NextTerm() (term Term, err error) {
 		// }
 		// term = int(x)
 		var x int32
-		err := binary.Read(d.r, be, &x)
+		err = binary.Read(d.r, be, &x)
 		if err != nil {
-			return nil, err
+			break
 		}
 		term = int(x)
 
 	case ettSmallBig:
 		// $nAS…
-		b = make([]byte, 2)
-		if _, err = io.ReadFull(d.r, b); err != nil {
+		b, err = d.read(2)
+		if err != nil {
 			break
 		}
 		sign := b[1]
-		b = make([]byte, b[0])
-		term, err = readBigInt(d.r, b, sign)
+		term, err = d.readBigInt(int(b[0]), sign)
 
 	case ettLargeBig:
 		// $oAAAAS…
-		b = make([]byte, 5)
-		if _, err = io.ReadFull(d.r, b); err != nil {
+		b, err = d.read(5)
+		if err != nil {
 			break
 		}
+
 		sign := b[4]
-		b = make([]byte, be.Uint32(b[:4]))
-		term, err = readBigInt(d.r, b, sign)
+		term, err = d.readBigInt(int(be.Uint32(b[:4])), sign)
 
 	case ettNil:
 		// $j
@@ -508,19 +501,15 @@ func (e *ErrUnknownTerm) Error() string {
 	return fmt.Sprintf("read: unknown term type %d", e.termType)
 }
 
-func newAtom(b []byte) interface{} {
-	return Atom(b)
-}
-
-func readBigInt(r io.Reader, b []byte, sign byte) (interface{}, error) {
-	if _, err := io.ReadFull(r, b); err != nil {
+func (d *Decoder) readBigInt(l int, sign byte) (interface{}, error) {
+	b, err := d.read(l)
+	if err != nil {
 		return nil, err
 	}
 
-	size := len(b)
-	hsize := size >> 1
+	hsize := l >> 1
 	for i := 0; i < hsize; i++ {
-		b[i], b[size-i-1] = b[size-i-1], b[i]
+		b[i], b[l-i-1] = b[l-i-1], b[i]
 	}
 
 	v := new(big.Int).SetBytes(b)
@@ -549,17 +538,52 @@ func (d *Decoder) ruint32() (uint32, error) {
 	return be.Uint32(b), err
 }
 
+// reads a byte and makes a byte slice with that size
 func (d *Decoder) buint8() ([]byte, error) {
 	size, err := d.readByte()
 	return make([]byte, size), err
 }
 
+// reads a byte then reads n amount of bytes into a slice
+// the returned slice is reused so do not keep it around
+func (d *Decoder) uint8BorrowRead() ([]byte, error) {
+	size, err := d.readByte()
+	if err != nil {
+		return nil, err
+	}
+	return d.read(int(size))
+}
+
+// reads 4 bytes as an uint and makes a byte slice with that size
 func (d *Decoder) buint16() ([]byte, error) {
 	size, err := d.ruint16()
 	return make([]byte, size), err
 }
 
+// reads 2 bytes then reads n amount of bytes into a slice
+// the returned slice is reused so do not keep it around
+func (d *Decoder) uint16BorrowRead() ([]byte, error) {
+	size, err := d.ruint16()
+	if err != nil {
+		return nil, err
+	}
+
+	return d.read(int(size))
+}
+
+// reads 4 bytes as an uint and makes a byte slice with that size
 func (d *Decoder) buint32() ([]byte, error) {
 	size, err := d.ruint32()
 	return make([]byte, size), err
+}
+
+// reads 4 bytes then reads n amount of bytes into a slice
+// the returned slice is reused so do not keep it around
+func (d *Decoder) uint32BorrowRead() ([]byte, error) {
+	size, err := d.ruint32()
+	if err != nil {
+		return nil, err
+	}
+
+	return d.read(int(size))
 }

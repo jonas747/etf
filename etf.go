@@ -181,14 +181,9 @@ func termIntoStruct(term Term, destV reflect.Value) error {
 
 	switch x := term.(type) {
 	case Atom:
-		if destType.Kind() != reflect.String && (x == "" || x == "nil") {
-			return intSwitch(0, destV, destType)
-		}
-		if destType.Kind() != reflect.String {
-			return NewInvalidTypesError(destType, term)
-		}
-
-		destV.SetString(string(x))
+		return setStringField(string(x), destV, destType)
+	case string:
+		return setStringField(x, destV, destType)
 	case []byte:
 		if destType.Kind() == reflect.String {
 			destV.SetString(string(x))
@@ -220,6 +215,18 @@ func intSwitch(term Term, destV reflect.Value, destType reflect.Type) error {
 	default:
 		return fmt.Errorf("Unknown term %s, %v", reflect.TypeOf(term).Name(), x)
 	}
+}
+
+func setStringField(s string, destV reflect.Value, destType reflect.Type) error {
+	if destType.Kind() != reflect.String && (s == "" || s == "nil") {
+		return intSwitch(0, destV, destType)
+	}
+	if destType.Kind() != reflect.String {
+		return NewInvalidTypesError(destType, Atom(s))
+	}
+
+	destV.SetString(s)
+	return nil
 }
 
 func setListField(v List, field reflect.Value, t reflect.Type) error {
