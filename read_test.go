@@ -306,7 +306,7 @@ func TestReadInt(t *testing.T) {
 		t.Error(err)
 	} else if l := in.Len(); l != 0 {
 		t.Errorf("buffer len %d", l)
-	} else if exp := 0; v != exp {
+	} else if exp := int64(0); v != exp {
 		t.Errorf("expected %v, got %v", exp, v)
 	}
 
@@ -316,7 +316,7 @@ func TestReadInt(t *testing.T) {
 		t.Error(err)
 	} else if l := in.Len(); l != 0 {
 		t.Errorf("buffer len %d", l)
-	} else if exp := 0; v != exp {
+	} else if exp := int64(0); v != exp {
 		t.Errorf("expected %v, got %v", exp, v)
 	}
 }

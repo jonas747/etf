@@ -501,10 +501,19 @@ func (e *ErrUnknownTerm) Error() string {
 	return fmt.Sprintf("read: unknown term type %d", e.termType)
 }
 
+var (
+	biggestInt = big.NewInt(0xfffffffffffffff)
+	lowestInt  = big.NewInt(-0xfffffffffffffff)
+)
+
 func (d *Decoder) readBigInt(l int, sign byte) (interface{}, error) {
 	b, err := d.read(l)
 	if err != nil {
 		return nil, err
+	}
+	if l <= 8 {
+		r := d.readInt64(b, sign)
+		return r, nil
 	}
 
 	hsize := l >> 1
@@ -518,14 +527,33 @@ func (d *Decoder) readBigInt(l int, sign byte) (interface{}, error) {
 	}
 
 	// try int and int64
-	v64 := v.Int64()
-	if x := int(v64); v.Cmp(big.NewInt(int64(x))) == 0 {
-		return x, nil
-	} else if v.Cmp(big.NewInt(v64)) == 0 {
-		return v64, nil
+	if v.Cmp(biggestInt) < 0 && v.Cmp(lowestInt) > 0 {
+		return v.Int64(), nil
 	}
 
 	return v, nil
+}
+
+var powers = []int64{
+	int64(math.Pow(256, 0)),
+	int64(math.Pow(256, 1)),
+	int64(math.Pow(256, 2)),
+	int64(math.Pow(256, 3)),
+	int64(math.Pow(256, 4)),
+	int64(math.Pow(256, 5)),
+	int64(math.Pow(256, 6)),
+	int64(math.Pow(256, 7)),
+}
+
+func (d *Decoder) readInt64(b []byte, sign byte) int64 {
+	var result int64
+	for i := 0; i < len(b); i++ {
+		result += int64(b[i]) * powers[i]
+	}
+	if sign != 0 {
+		result = -result
+	}
+	return result
 }
 
 func (d *Decoder) ruint16() (uint16, error) {
