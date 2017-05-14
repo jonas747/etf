@@ -179,6 +179,11 @@ func TermIntoStruct(term Term, dest interface{}) error {
 func termIntoStruct(term Term, destV reflect.Value) error {
 	destType := destV.Type()
 
+	if destType.Kind() == reflect.Interface {
+		destV.Set(reflect.ValueOf(term))
+		return nil
+	}
+
 	switch x := term.(type) {
 	case Atom:
 		return setStringField(string(x), destV, destType)
