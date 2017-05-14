@@ -88,39 +88,39 @@ func TestReadBitBinary(t *testing.T) {
 	}
 }
 
-func TestReadBool(t *testing.T) {
-	c := new(Context)
+// func TestReadBool(t *testing.T) {
+// 	c := new(Context)
 
-	// true
-	in := bytes.NewBuffer([]byte{100, 0, 4, 't', 'r', 'u', 'e'})
-	if v, err := c.Read(in); err != nil {
-		t.Error(err)
-	} else if l := in.Len(); l != 0 {
-		t.Errorf("buffer len %d", l)
-	} else if exp := true; exp != v {
-		t.Errorf("expected %v, got %v", exp, v)
-	}
+// 	// true
+// 	in := bytes.NewBuffer([]byte{100, 0, 4, 't', 'r', 'u', 'e'})
+// 	if v, err := c.Read(in); err != nil {
+// 		t.Error(err)
+// 	} else if l := in.Len(); l != 0 {
+// 		t.Errorf("buffer len %d", l)
+// 	} else if exp := true; exp != v {
+// 		t.Errorf("expected %v, got %v", exp, v)
+// 	}
 
-	// false
-	in = bytes.NewBuffer([]byte{100, 0, 5, 'f', 'a', 'l', 's', 'e'})
-	if v, err := c.Read(in); err != nil {
-		t.Error(err)
-	} else if l := in.Len(); l != 0 {
-		t.Errorf("buffer len %d", l)
-	} else if exp := false; exp != v {
-		t.Errorf("expected %v, got %v", exp, v)
-	}
+// 	// false
+// 	in = bytes.NewBuffer([]byte{100, 0, 5, 'f', 'a', 'l', 's', 'e'})
+// 	if v, err := c.Read(in); err != nil {
+// 		t.Error(err)
+// 	} else if l := in.Len(); l != 0 {
+// 		t.Errorf("buffer len %d", l)
+// 	} else if exp := false; exp != v {
+// 		t.Errorf("expected %v, got %v", exp, v)
+// 	}
 
-	// error
-	in = bytes.NewBuffer([]byte{100, 0, 3, 97, 98, 99})
-	if v, err := c.Read(in); err != nil {
-		t.Error(err)
-	} else if l := in.Len(); l != 0 {
-		t.Errorf("buffer len %d", l)
-	} else if exp := Atom("abc"); exp != v {
-		t.Errorf("expected %v, got %v", exp, v)
-	}
-}
+// 	// error
+// 	in = bytes.NewBuffer([]byte{100, 0, 3, 97, 98, 99})
+// 	if v, err := c.Read(in); err != nil {
+// 		t.Error(err)
+// 	} else if l := in.Len(); l != 0 {
+// 		t.Errorf("buffer len %d", l)
+// 	} else if exp := Atom("abc"); exp != v {
+// 		t.Errorf("expected %v, got %v", exp, v)
+// 	}
+// }
 
 func TestReadFloat(t *testing.T) {
 	c := new(Context)

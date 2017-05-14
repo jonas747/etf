@@ -54,24 +54,24 @@ func TestWriteBinary(t *testing.T) {
 	test(bytes.Repeat([]byte{123}, 65536))
 }
 
-func TestWriteBool(t *testing.T) {
-	c := new(Context)
-	test := func(in bool) {
-		w := new(bytes.Buffer)
-		if err := c.writeBool(w, in); err != nil {
-			t.Error(in, err)
-		} else if v, err := c.Read(w); err != nil {
-			t.Error(in, err)
-		} else if l := w.Len(); l != 0 {
-			t.Errorf("%v: buffer len %d", in, l)
-		} else if v != in {
-			t.Errorf("expected %v, got %v", in, v)
-		}
-	}
+// func TestWriteBool(t *testing.T) {
+// 	c := new(Context)
+// 	test := func(in bool) {
+// 		w := new(bytes.Buffer)
+// 		if err := c.writeBool(w, in); err != nil {
+// 			t.Error(in, err)
+// 		} else if v, err := c.Read(w); err != nil {
+// 			t.Error(in, err)
+// 		} else if l := w.Len(); l != 0 {
+// 			t.Errorf("%v: buffer len %d", in, l)
+// 		} else if v != in {
+// 			t.Errorf("expected %v, got %v", in, v)
+// 		}
+// 	}
 
-	test(true)
-	test(false)
-}
+// 	test(true)
+// 	test(false)
+// }
 
 func TestWriteFloat(t *testing.T) {
 	c := new(Context)
